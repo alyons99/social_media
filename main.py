@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.params import Body
 
 app = FastAPI()
 
@@ -10,4 +11,9 @@ def root():
 
 @app.get("/posts")
 def get_posts():
-    return {"data": "This is your posts"}
+    return {"data": "This is your posts."}
+
+#extract data from the body of the payload. Tested using Postman.
+@app.post("/posts")
+def create_posts(body: dict = Body(...)):
+    print(body)
