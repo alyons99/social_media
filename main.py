@@ -20,8 +20,13 @@ class Post(BaseModel):
 my_posts = [{"title": "title of post 1", "content": "content of post 1", "id": 1}, {"title": "favorite foods", "content" : "I like pizza", "id": 2}]
 
 
+def find_post(id):
+    for p in my_posts:
+        if p['id'] == id:
+            return p
+
 #the decorator turns this function into a path/route operation (get HTTP method)
-#extract data from the body of the payload. Tested using Postman.
+#extract data from the body of the payload.
 @app.post("/posts")
 def create_posts(post: Post):
     #will convert the pydantic class into a dictionary 
@@ -36,10 +41,13 @@ def create_posts(post: Post):
 def get_posts():
     return {"data": my_posts}
 
-#get post by id
-@app.get("/posts{id}")
-def get_posts_by_id():
-    pass
+#get post by id (path parameter)
+@app.get("/posts/{id}")
+#this adds data validation and converts the string ID into an int so it can be compared properly in the find_post func
+def get_post(id: int):
+    post = find_post(id)
+    print(post)
+    return {"post_detail": post}
 
 #update post by id
 #put needs all fields, patch just needs the field that gets updated.
