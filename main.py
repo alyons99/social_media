@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status, HTTPException
 # from fastapi.params import Body
 from pydantic import BaseModel
 from random import randrange
@@ -44,9 +44,13 @@ def get_posts():
 #get post by id (path parameter)
 @app.get("/posts/{id}")
 #this adds data validation and converts the string ID into an int so it can be compared properly in the find_post func
-def get_post(id: int):
+def get_post(id: int, response: Response):
     post = find_post(id)
-    print(post)
+    #add a check for if the id was found.
+    if not post:
+        #if not, set status code to 404 (otherwise it will be 200 but return null)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Error 404: Post with id {id} was not found.")
     return {"post_detail": post}
 
 #update post by id
