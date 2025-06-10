@@ -25,9 +25,15 @@ def find_post(id):
         if p['id'] == id:
             return p
 
+def find_index_post(id):
+    for i, p in enumerate(my_posts):
+        if p['id'] == id:
+            return i
+
+
 #the decorator turns this function into a path/route operation (get HTTP method)
 #extract data from the body of the payload.
-@app.post("/posts")
+@app.post("/posts", status_code=status.HTTP_201_CREATED)
 def create_posts(post: Post):
     #will convert the pydantic class into a dictionary 
     post_dict = post.model_dump()
@@ -44,7 +50,7 @@ def get_posts():
 #get post by id (path parameter)
 @app.get("/posts/{id}")
 #this adds data validation and converts the string ID into an int so it can be compared properly in the find_post func
-def get_post(id: int, response: Response):
+def get_post(id: int):
     post = find_post(id)
     #add a check for if the id was found.
     if not post:
@@ -56,10 +62,15 @@ def get_post(id: int, response: Response):
 #update post by id
 #put needs all fields, patch just needs the field that gets updated.
 @app.put("/posts/{id}")
-def update_posts():
+def update_post():
     pass
 
 #delete post by id
-@app.delete("/posts/{id}")
-def delete_posts():
-    pass
+@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(id: int):
+    index = find_index_post(id)
+    if index is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
+    my_posts.pop(index)
+    #no data will be sent back because post was deleted.
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
