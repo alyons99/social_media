@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import FastAPI, Response, status, HTTPException
+from fastapi import FastAPI, Response, status, HTTPException, Depends
 # from fastapi.params import Body
 from pydantic import BaseModel
 from random import randrange
@@ -7,6 +7,7 @@ import psycopg
 from psycopg.rows import dict_row
 import os
 from dotenv import load_dotenv
+import time
 
 app = FastAPI()
 load_dotenv()
@@ -18,25 +19,15 @@ class Post(BaseModel):
     content: str
     published: bool = True
 
-#database connection is looking for a .env file, so put your variables there.
-print("DB_HOST:", os.getenv('DB_HOST', 'NOT SET'))
-print("DB_NAME:", os.getenv('DB_NAME', 'NOT SET'))
-print("DB_USER:", os.getenv('DB_USER', 'NOT SET'))
-print("DB_PASSWORD:", 'SET' if os.getenv('DB_PASSWORD') else 'NOT SET')
-
-try:
+def get_db():
     with psycopg.connect(
-        host = os.getenv('DB_HOST', 'localhost'), 
-        dbname = os.getenv('DB_NAME'), 
-        user = os.getenv('DB_USER'), 
-        password = os.getenv('DB_PASSWORD'),
-        row_factory = dict_row 
+        host=os.getenv('DB_HOST', 'localhost'),
+        dbname=os.getenv('DB_NAME'),
+        user=os.getenv('DB_USER'),
+        password=os.getenv('DB_PASSWORD'),
+        row_factory=dict_row
     ) as conn:
-        with conn.cursor() as cur:
-            print("Database connection successful")
-except Exception as error:
-    print("Connecting to database failed.")
-    print(f"Error was: {error}.")
+        yield conn
 
 
 my_posts = [{"title": "title of post 1", "content": "content of post 1", "id": 1}, {"title": "favorite foods", "content" : "I like pizza", "id": 2}]
@@ -54,32 +45,35 @@ def find_index_post(id):
 
 
 #the decorator turns this function into a path/route operation (get HTTP method)
-#extract data from the body of the payload.
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
-def create_posts(post: Post):
+def create_posts(post: Post, db: psycopg.Connection = Depends(get_db)):
     #will convert the pydantic class into a dictionary 
-    post_dict = post.model_dump()
-    post_dict['id'] = randrange(0,9999999)
-    my_posts.append(post_dict)
-    return {"data": post_dict}
-    
+    with db.cursor() as cur:
+        cur.execute("""INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *""", (post.title, post.content, post.published))
+        new_post = cur.fetchone()
+        return{"data": new_post}
 
 #get info about all posts
 @app.get("/posts")
-def get_posts():
-    return {"data": my_posts}
+def get_posts(db: psycopg.Connection = Depends(get_db)):
+    with db.cursor() as cur:
+        cur.execute("""SELECT * FROM posts """)
+        posts = cur.fetchall()
+        print(posts)
+        return {"posts": posts}
 
 #get post by id (path parameter)
 @app.get("/posts/{id}")
 #this adds data validation and converts the string ID into an int so it can be compared properly in the find_post func
-def get_post(id: int):
-    post = find_post(id)
-    #add a check for if the id was found.
-    if not post:
-        #if not, set status code to 404 (otherwise it will be 200 but return null)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"Error 404: Post with id {id} was not found.")
-    return {"post_detail": post}
+def get_post(id: int, db: psycopg.Connection = Depends(get_db)):
+    with db.cursor() as cur:
+        cur.execute("""SELECT * FROM posts WHERE id = %s """, (id,))
+        post = cur.fetchone()
+        print(post)
+
+        if not post:
+            raise HTTPException(status_code=404, detail="post not found")
+        return {"post": post}
 
 #update post by id
 #put needs all fields, patch just needs the field that gets updated.
