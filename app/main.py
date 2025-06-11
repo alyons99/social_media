@@ -7,7 +7,6 @@ import psycopg
 from psycopg.rows import dict_row
 import os
 from dotenv import load_dotenv
-import time
 
 app = FastAPI()
 load_dotenv()
@@ -64,13 +63,13 @@ def get_posts(db: psycopg.Connection = Depends(get_db)):
 
 #get post by id (path parameter)
 @app.get("/posts/{id}")
-#this adds data validation and converts the string ID into an int so it can be compared properly in the find_post func
+#this adds data validation and converts the string ID into an int
 def get_post(id: int, db: psycopg.Connection = Depends(get_db)):
     with db.cursor() as cur:
         cur.execute("""SELECT * FROM posts WHERE id = %s """, (id,))
         post = cur.fetchone()
         print(post)
-
+        #raise an error if not found
         if not post:
             raise HTTPException(status_code=404, detail="post not found")
         return {"post": post}
@@ -78,26 +77,24 @@ def get_post(id: int, db: psycopg.Connection = Depends(get_db)):
 #update post by id
 #put needs all fields, patch just needs the field that gets updated.
 @app.put("/posts/{id}")
-def update_post(id: int, post:Post):
-    index = find_index_post(id)
-    if index is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
-    #set a new variable to the post turned into a dict
-    post_dict = post.model_dump()
-    #set the id of the new post_dict to be the same as the id we took in
-    post_dict['id'] = id
-    #convert the stored my_post at that index to the updated vales
-    my_posts[index] = post_dict
-    #quick return statement for postman
-    return {"data": post_dict}
+def update_post(id: int, post:Post, db: psycopg.Connection = Depends(get_db)):
+    with db.cursor() as cur:
+        cur.execute("""UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *""", (post.title, post.content, post.published, id))
+        updated_post = cur.fetchone()
+
+        if not updated_post:
+            raise HTTPException(status_code=404, detail="post not found")
+        return {"data": updated_post}
     
 
 #delete post by id
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int):
-    index = find_index_post(id)
-    if index is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
-    my_posts.pop(index)
-    #no data will be sent back because post was deleted.
+def delete_post(id: int,  db: psycopg.Connection = Depends(get_db)):
+    with db.cursor() as cur:
+            cur.execute("""DELETE FROM posts WHERE id = %s RETURNING *""", (id,))
+            deleted_post = cur.fetchone()
+
+            #raise an error if not found
+            if not deleted_post:
+                raise HTTPException(status_code=404, detail="post not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
