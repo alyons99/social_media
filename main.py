@@ -39,7 +39,7 @@ def create_posts(post: Post):
     post_dict = post.model_dump()
     post_dict['id'] = randrange(0,9999999)
     my_posts.append(post_dict)
-    return {"dada": post_dict}
+    return {"data": post_dict}
     
 
 #get info about all posts
@@ -62,8 +62,19 @@ def get_post(id: int):
 #update post by id
 #put needs all fields, patch just needs the field that gets updated.
 @app.put("/posts/{id}")
-def update_post():
-    pass
+def update_post(id: int, post:Post):
+    index = find_index_post(id)
+    if index is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
+    #set a new variable to the post turned into a dict
+    post_dict = post.model_dump()
+    #set the id of the new post_dict to be the same as the id we took in
+    post_dict['id'] = id
+    #convert the stored my_post at that index to the updated vales
+    my_posts[index] = post_dict
+    #quick return statement for postman
+    return {"data": post_dict}
+    
 
 #delete post by id
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
