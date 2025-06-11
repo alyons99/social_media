@@ -3,18 +3,40 @@ from fastapi import FastAPI, Response, status, HTTPException
 # from fastapi.params import Body
 from pydantic import BaseModel
 from random import randrange
+import psycopg
+from psycopg.rows import dict_row
+import os
+from dotenv import load_dotenv
 
 app = FastAPI()
+load_dotenv()
 
 #defining a post class. Exteneding BaseModel from pydantic, we are assigning they rules for post contents
 #this is our schema
 class Post(BaseModel):
     title: str
     content: str
-    #setting a default value
     published: bool = True
-    #this is an optional field. If the post request doesnt include a rating, it will not send one. Will throw an error is the value isnt an int.
-    rating: Optional[int] = None
+
+#database connection is looking for a .env file, so put your variables there.
+print("DB_HOST:", os.getenv('DB_HOST', 'NOT SET'))
+print("DB_NAME:", os.getenv('DB_NAME', 'NOT SET'))
+print("DB_USER:", os.getenv('DB_USER', 'NOT SET'))
+print("DB_PASSWORD:", 'SET' if os.getenv('DB_PASSWORD') else 'NOT SET')
+
+try:
+    with psycopg.connect(
+        host = os.getenv('DB_HOST', 'localhost'), 
+        dbname = os.getenv('DB_NAME'), 
+        user = os.getenv('DB_USER'), 
+        password = os.getenv('DB_PASSWORD'),
+        row_factory = dict_row 
+    ) as conn:
+        with conn.cursor() as cur:
+            print("Database connection successful")
+except Exception as error:
+    print("Connecting to database failed.")
+    print(f"Error was: {error}.")
 
 
 my_posts = [{"title": "title of post 1", "content": "content of post 1", "id": 1}, {"title": "favorite foods", "content" : "I like pizza", "id": 2}]
