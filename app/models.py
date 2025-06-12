@@ -24,7 +24,7 @@ class PostRead(SQLModel):
     title: str
     content: str
     published: bool
-    date_created: datetime
+    #date_created: datetime
 
 class PostUpdate(SQLModel):
     """Schema for updating a post"""

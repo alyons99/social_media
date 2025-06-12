@@ -111,3 +111,11 @@ The application uses SQLModel (built on SQLAlchemy) for database operations:
 
 ### Logging
 Database queries are logged when running in development mode (`echo=True` in engine configuration).
+
+### Planned Work
+1- Create user registration system using JWT and OAuth2
+2- Implementing likes
+3- Containerize using Heroku and Docker
+4- Set up testing and production environments
+5- Set up CI/CD pipeline using Github Actions
+6- Deploy
