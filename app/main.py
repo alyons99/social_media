@@ -1,100 +1,72 @@
-from typing import Optional
-from fastapi import FastAPI, Response, status, HTTPException, Depends
-# from fastapi.params import Body
-from pydantic import BaseModel
-from random import randrange
-import psycopg
-from psycopg.rows import dict_row
-import os
-from dotenv import load_dotenv
+from fastapi import FastAPI, Depends, HTTPException
+from sqlmodel import Session, select
+from typing import List
+from .database import create_db_and_tables, get_session
+from .models import Post, PostCreate, PostRead, PostUpdate
 
-app = FastAPI()
-load_dotenv()
+app = FastAPI(title="Social Media Posts API")
 
-#defining a post class. Exteneding BaseModel from pydantic, we are assigning they rules for post contents
-#this is our schema
-class Post(BaseModel):
-    title: str
-    content: str
-    published: bool = True
+@app.on_event("startup")
+async def on_startup():
+    """Create database tables on startup"""
+    create_db_and_tables()
 
-def get_db():
-    with psycopg.connect(
-        host=os.getenv('DB_HOST', 'localhost'),
-        dbname=os.getenv('DB_NAME'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        row_factory=dict_row
-    ) as conn:
-        yield conn
+@app.post("/posts/", response_model=PostRead)
+def create_post(post: PostCreate, session: Session = Depends(get_session)):
+    """Create a new post"""
+    db_post = Post.from_orm(post)
+    session.add(db_post)
+    session.commit()
+    session.refresh(db_post)
+    return db_post
 
+@app.get("/posts/", response_model=List[PostRead])
+def read_posts(skip: int = 0, limit: int = 100, session: Session = Depends(get_session)):
+    """Get all posts with pagination"""
+    statement = select(Post).offset(skip).limit(limit)
+    posts = session.exec(statement).all()
+    return posts
 
-my_posts = [{"title": "title of post 1", "content": "content of post 1", "id": 1}, {"title": "favorite foods", "content" : "I like pizza", "id": 2}]
+@app.get("/posts/{post_id}", response_model=PostRead)
+def read_post(post_id: int, session: Session = Depends(get_session)):
+    """Get a specific post by ID"""
+    post = session.get(Post, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return post
 
-
-def find_post(id):
-    for p in my_posts:
-        if p['id'] == id:
-            return p
-
-def find_index_post(id):
-    for i, p in enumerate(my_posts):
-        if p['id'] == id:
-            return i
-
-
-#the decorator turns this function into a path/route operation (get HTTP method)
-@app.post("/posts", status_code=status.HTTP_201_CREATED)
-def create_posts(post: Post, db: psycopg.Connection = Depends(get_db)):
-    #will convert the pydantic class into a dictionary 
-    with db.cursor() as cur:
-        cur.execute("""INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *""", (post.title, post.content, post.published))
-        new_post = cur.fetchone()
-        return{"data": new_post}
-
-#get info about all posts
-@app.get("/posts")
-def get_posts(db: psycopg.Connection = Depends(get_db)):
-    with db.cursor() as cur:
-        cur.execute("""SELECT * FROM posts """)
-        posts = cur.fetchall()
-        print(posts)
-        return {"posts": posts}
-
-#get post by id (path parameter)
-@app.get("/posts/{id}")
-#this adds data validation and converts the string ID into an int
-def get_post(id: int, db: psycopg.Connection = Depends(get_db)):
-    with db.cursor() as cur:
-        cur.execute("""SELECT * FROM posts WHERE id = %s """, (id,))
-        post = cur.fetchone()
-        print(post)
-        #raise an error if not found
-        if not post:
-            raise HTTPException(status_code=404, detail="post not found")
-        return {"post": post}
-
-#update post by id
-#put needs all fields, patch just needs the field that gets updated.
-@app.put("/posts/{id}")
-def update_post(id: int, post:Post, db: psycopg.Connection = Depends(get_db)):
-    with db.cursor() as cur:
-        cur.execute("""UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *""", (post.title, post.content, post.published, id))
-        updated_post = cur.fetchone()
-
-        if not updated_post:
-            raise HTTPException(status_code=404, detail="post not found")
-        return {"data": updated_post}
+@app.put("/posts/{post_id}", response_model=PostRead)
+def update_post(post_id: int, post_update: PostUpdate, session: Session = Depends(get_session)):
+    """Update a specific post"""
+    db_post = session.get(Post, post_id)
+    if not db_post:
+        raise HTTPException(status_code=404, detail="Post not found")
     
+    post_data = post_update.dict(exclude_unset=True)
+    for key, value in post_data.items():
+        setattr(db_post, key, value)
+    
+    session.add(db_post)
+    session.commit()
+    session.refresh(db_post)
+    return db_post
 
-#delete post by id
-@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int,  db: psycopg.Connection = Depends(get_db)):
-    with db.cursor() as cur:
-            cur.execute("""DELETE FROM posts WHERE id = %s RETURNING *""", (id,))
-            deleted_post = cur.fetchone()
+@app.delete("/posts/{post_id}")
+def delete_post(post_id: int, session: Session = Depends(get_session)):
+    """Delete a specific post"""
+    post = session.get(Post, post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    session.delete(post)
+    session.commit()
+    return {"message": "Post deleted successfully"}
 
-            #raise an error if not found
-            if not deleted_post:
-                raise HTTPException(status_code=404, detail="post not found")
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+@app.get("/")
+def root():
+    """Root endpoint"""
+    return {"message": "Social Media Posts API"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
