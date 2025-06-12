@@ -31,3 +31,13 @@ class PostUpdate(SQLModel):
     title: Optional[str] = None
     content: Optional[str] = None
     published: Optional[bool] = None
+
+
+class User(SQLModel, table=True):
+    """User model for social media app"""
+    __tablename__ = "users"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(nullable=False, unique=True)
+    password: str = Field(nullable=False)
+    date_created: datetime = Field(default_factory=datetime.utcnow, nullable=False)
