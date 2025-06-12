@@ -14,7 +14,7 @@ async def on_startup():
 @app.post("/posts/", response_model=PostRead)
 def create_post(post: PostCreate, session: Session = Depends(get_session)):
     """Create a new post"""
-    db_post = Post.from_orm(post)
+    db_post = Post.model_validate(post)
     session.add(db_post)
     session.commit()
     session.refresh(db_post)
@@ -42,7 +42,7 @@ def update_post(post_id: int, post_update: PostUpdate, session: Session = Depend
     if not db_post:
         raise HTTPException(status_code=404, detail="Post not found")
     
-    post_data = post_update.dict(exclude_unset=True)
+    post_data = post_update.model_dump(exclude_unset=True)
     for key, value in post_data.items():
         setattr(db_post, key, value)
     
